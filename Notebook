@@ -1,0 +1,1138 @@
+# Import library
+import numpy as np 
+import pandas as pd 
+import matplotlib.pyplot as plt 
+import seaborn as sns
+import missingno as msno
+
+# Statistics
+from scipy.stats import normaltest
+from scipy.stats import skew
+
+# Train Test Split
+from sklearn.model_selection import train_test_split, cross_val_score, RandomizedSearchCV, GridSearchCV, KFold
+
+# Preprocessing
+import category_encoders as ce
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, OrdinalEncoder
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import SimpleImputer, IterativeImputer
+from sklearn.preprocessing import RobustScaler, MinMaxScaler, StandardScaler, PolynomialFeatures
+
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+# ML algorithm
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor, plot_tree
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor, VotingRegressor, StackingRegressor
+from sklearn.svm import SVR
+import xgboost as xgb
+from sklearn.compose import TransformedTargetRegressor
+
+# Evaluation
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score
+
+# Data
+
+Berikut adalah 5 data pertama pada dataset Daegu Apartment:
+# Load dataset
+
+df=pd.read_csv('data_daegu_apartment.csv')
+df.head()
+# Jumlah dan tipe data pada setiap kolom
+
+df.info()
+# Data unik pada feature TimeToSubway
+
+df['TimeToSubway'].unique()
+# Mengubah format penulisan pada feature TimeToSubway
+
+df.loc[df['TimeToSubway']=='5min~10min','TimeToSubway']='5min-10min'
+df.loc[df['TimeToSubway']=='10min~15min','TimeToSubway']='10min-15min'
+df.loc[df['TimeToSubway']=='15min~20min','TimeToSubway']='15min-20min'
+Sebelumnya, kita akan melakukan penggantian format penulisan pada kolom TimeToSubway yang pada awalnya menggunakan '~' menjadi '-'. Penggantian format penulisan dilakukan untuk menyamakan format penulisan dan menghindari kekeliruan penulisan.
+# Explanatory Data Analysis
+
+**Statistic Summary**
+df.describe(include='all')
+# Jumlah data unik feature HallwayType
+
+df['HallwayType'].value_counts()
+# Jumlah data unik feature TimeToSubway
+
+df['TimeToSubway'].value_counts()
+# Jumlah data unik feature SubwayStation
+
+df['SubwayStation'].value_counts()
+Secara umum informasi yang didapatkan berdasarkan data di atas adalah sebagai berikut:
+
+Terdapat 4.123 data dengan 11 feature pada dataset.
+Tipe apartment terbanyak adalah apartment berteras (61,3%), lalu disusul oleh apartment mixed (27,4%) dan apartment berkoridor (11,3%).
+Mayoritas apartment di Daegu cukup dekat dengan stasiun karena mayoritas hanya membutuhkan 0-5 menit menuju stasiun dan Stasiun Kyungbuk Uni Hospital merupakan stasiun yang paling dekat dengan mayoritas apartment.
+Apartment di Daegu memiliki rata-rata 2 fasilitas, 4 kantor publik, 3 universitas, dan 569 tempat parkir basement terdekat.
+Rata-rata apartment di Daegu dibangun pada tahun 2003 atau dapat dikatakan cukup tua karena apartment tertua di Daegu dibangun pada tahun 1978 dan apartment yang paling baru dibangun pada tahun 2015.
+Apartment di Daegu memiliki rata-rata 6 fasilitas di dalam apartment dimana jumlah fasilitas dapat dikatakan cukup banyak karena jumlah fasilitas terbanyak di dalam apartment mencapai 10 fasilitas.
+Ukuran apartment dan harga apartment di Daegu cukup bervariasi dengan rata-rata berukuran 954,63 square feet dan rata-rata harga 221.767,93 won sehingga rata-rata harga apartment di Daegu adalah 232,31 won/square feet.
+# Distribusi Data
+
+Kita akan melihat distribusi data dengan menggunakan histogram pada data kontinu yaitu tahun pembangunan apartment (YearBuilt), ukuran apartment (Size(sqf)), dan harga apartment (SalePrice).
+# Distribusi feature YearBuilt, Size(sqf), dan SalePrice
+
+plt.figure(figsize=(15,10))
+
+columns=['YearBuilt','Size(sqf)','SalePrice']
+
+plotnumber=1
+for kolom in columns:
+    plt.subplot(2,2,plotnumber)
+    sns.distplot(df[kolom])
+    plt.title(kolom)
+
+    plotnumber +=1
+
+plt.suptitle('Distribusi Data',size=24)
+plt.show()
+# Normality test feature YearBuilt, Size(Sqf), dan SalePrice
+
+column=['YearBuilt','Size(sqf)','SalePrice']
+
+hasil=[]
+for i in column:
+    stats,pval=normaltest(df[i])
+    if pval>0.05:
+        hasil.append('Distribusi normal')
+    else:
+        hasil.append('Tidak berdistribusi normal')
+
+pd.DataFrame({'Kolom':column, 'Distribusi':hasil})
+# Skewness feature YearBuilt, Size(sqf), dan SalePrice
+
+column=['YearBuilt','Size(sqf)','SalePrice']
+
+hasil=[]
+for i in column:
+    hasil=skew(df[column])
+
+pd.DataFrame({'Kolom':column, 'Skewness':hasil})
+1. Berdasarkan histogram dan normality test, kolom YearBuilt,Size(sqf), dan SalePrice tidak berdistribusi normal.
+2. Berdasarkan histogram dan hasil skewness, YearBuilt memiliki skewness negatif sehingga berdistribusi skewed to the left yang artinya apartment di Daegu cenderung sudah tua karena sudah dibangun cukup lama sedangkan Size(sqf) dan SalePrice memiliki skewness positif sehingga berdistribusi skewed to the right yang artinya ukuran apartment di Daegu cenderung luas sehingga harganya juga cenderung mahal.
+**Total Apartment**
+# Total apartment berdasarkan tipe apartment 
+
+plt.figure(figsize = (10,6))
+fig = sns.countplot(data = df,x='HallwayType',order = df['HallwayType'].value_counts().index)
+
+for p in fig.patches:
+   fig.annotate('{:.0f}'.format(p.get_height()), (p.get_x()+0.25, p.get_height()+0.01))
+
+plt.title('Total Apartment Berdasarkan Tipe Apartment')
+plt.show()
+# Total tipe apartment berdasarkan stasiun subway terdekat
+
+plt.figure(figsize = (15,8))
+fig=sns.countplot(data=df,x='SubwayStation',order = df['SubwayStation'].value_counts().index)
+
+for p in fig.patches:
+   fig.annotate('{:.0f}'.format(p.get_height()), (p.get_x()+0.25, p.get_height()+0.01))
+
+plt.title('Total Apartment Berdasarkan Stasiun Terdekat')
+plt.show()
+Mayoritas apartment yang dijual merupakan tipe terraced dan tipe mixed. Selain itu mayoritas apartment berada di dekat Stasiun Kyungbuk Uni Hospital, Stasiun Myungduk, dan Stasiun Banwoldang.
+**Hubungan Tipe Apartemen, Ukuran, dan Jumlah Fasilitas di Apartmen Terhadap Harga Jual Apartemen**
+# Harga apartment berdasarkan tipe apartment
+
+sns.boxplot(data=df,y='SalePrice',x='HallwayType').set_title('Harga Apartment Berdasarkan Tipe Apartment')
+
+plt.show()
+# Median harga apartment berdasarkan tipe apartment
+
+df.groupby('HallwayType').median()['SalePrice'].sort_values(ascending=False)
+# Hubungan ukuran apartmen dengan harga apartment berdasarkan tipe apartment
+
+sns.scatterplot(data=df,x='Size(sqf)',y='SalePrice',hue='HallwayType')
+plt.title('Hubungan Ukuran Apartment dengan Harga Apartment')
+
+plt.show()
+# Hubungan jumlah fasilitas di apartment dengan tipe apartment
+
+ax=sns.barplot(data=df,y='N_FacilitiesInApt',x='HallwayType',ci=False)
+
+for i in ax.containers:
+    ax.bar_label(i,)
+
+plt.title('Mean Jumlah Fasilitas di Apartment Berdasarkan Tipe Apartment')
+plt.show()
+Semakin besar ukuran apartment maka akan semakin mahal harga apartment tersebut. Tipe apartment corridor merupakan tipe apartment terkecil sehingga memiliki harga yang termurah dibandingkan 2 tipe apartment lainnya. Sedangkan tipe apartment mixed dan terraced memiliki ukuran yang cukup bervariasi dari kecil hingga luas namun tipe apartment mixed memiliki harga yang lebih murah dibandingkan tipe apartment terraced.
+
+Tipe apartment terraced memiliki jumlah fasilitas yang cenderung lebih banyak dibandingkan tipe apartment mixed dan tipe apartment corridor. Hal ini juga dapat menjadi salah satu penyebab tinggi harga apartment tipe terraced dibandingkan 2 tipe apartment lainnya (1,7 kali lipatnya tipe apartment mixed dan bahkan 3,5 kali lipatnya tipe apartment corridor).
+**Hubungan Tahun pembangunan Apartemen Dengan Harga Jual Apartemen**
+# Hubungan tahun pembangunan dengan harga apartment berdasarkan tipe apartment
+
+sns.lineplot(data=df,x='YearBuilt',y='SalePrice',hue='HallwayType',ci=False,estimator=np.median)
+
+plt.legend(loc=2)
+plt.ticklabel_format(useOffset=False)
+plt.title('Harga Apartment Berdasarkan Tahun Pembangunan Per Tipe Apartment')
+plt.show()
+Tipe apartment mixed baru mulai dibangun pada tahun 1992 namun semenjak tahun 2005 sudah tidak dibangun lagi. Tipe apartment terraced cenderung memiliki harga yang lebih tinggi pada unit yang baru dibangun namun menariknya untuk tipe apartment corridor, unit yang lebih lama dibangun cenderung memiliki harga yang lebih tinggi khususnya pada unit yang dibangun pada tahun 1980-an.
+**Hubungan Stasiun Terdekat Dengan Harga Jual Apartemen**
+# Hubungan waktu ke stasiun subway terdekat dengan harga apartment
+
+sns.boxplot(data=df,y='SalePrice',x='TimeToSubway',order=['no_bus_stop_nearby','0-5min','5min-10min','10min-15min','15min-20min']).set_title('Harga Apartment Berdasarkan Waktu ke Stasiun Terdekat')
+
+plt.show()
+# Hubungan stasiun subway terdekat dengan harga apartment
+
+plt.figure(figsize=(16,10))
+
+station_grouped=df.groupby('SubwayStation').median()['SalePrice'].sort_values(ascending=False)
+
+sns.boxplot(data=df,y='SalePrice',x='SubwayStation',order=station_grouped.index).set_title('Harga Apartment Berdasarkan Stasiun Terdekat')
+
+plt.show()
+# Median harga apartment berdasarkan waktu yang dibutuhkan menuju subway dan stasiun subway terdekat
+
+TimeToSubway_grouped=df.groupby('TimeToSubway').median()['SalePrice'].sort_values(ascending=False)
+SubwayStation_grouped=df.groupby('SubwayStation').median()['SalePrice'].sort_values(ascending=False)
+
+print(TimeToSubway_grouped)
+print(SubwayStation_grouped)
+# Median harga apartment berdasarkan stasiun subway terdekat per tipe apartment
+
+plt.figure(figsize=(16,10))
+
+pivot=df.pivot_table(index='SubwayStation', columns='HallwayType', values='SalePrice', aggfunc='median')
+
+stacked_plot=pivot.plot(kind='bar',stacked=True)
+for i in stacked_plot.containers:
+    labels = [v.get_height() if v.get_height() > 0 else '' for v in i]
+    stacked_plot.bar_label(i, labels=labels, label_type='center')
+plt.xlabel('Subway Station')
+
+plt.ylabel('Median SalePrice')
+plt.title('Median Harga Apartment Berdasarkan Stasiun Subway Terdekat Per Tipe Apartment ')
+plt.show()
+Semakin dekat apartment di Daegu dengan stasiun maka akan semakin mahal harga apartment tersebut, namun apartment yang tidak memiliki stasiun di sekitarnya tetap memiliki harga yang tinggi. Hal ini menunjukkan bahwa meskipun lokasi stasiun di dekat apartment mempengaruhi harga apartment, terdapat faktor lain yang juga mempengaruhi apartment untuk tetap memiliki harga yang tinggi.
+
+Secara keseluruhan, 3 daerah yang memiliki harga tertinggi adalah apartment yang berada di sekitar Stasiun Banwoldang, Stasiun Sin-nam, dan Kyungbuk University Hostipal. Apartment yang berada di sekitar Stasiun Banwoldang memiliki harga 3,6 kali lipat dibandingkan apartment yang berada di sekitar Stasiun Daegu dan apartment yang berada di sekitar Stasiun Sin-Nam dan Stasiun Kyungbuk University Hospital memiliki harga 2,8 kali lipat dibandingkan apartment yang berada di sekitar Stasiun Daegu.
+
+Berdasarkan median harga apartment berdasarkan stasiun subway terdekat per tipe apartment, apartment dengan tipe terraced selalu memiliki median harga yang tinggi sedangkan tipe corridor selalu memiliki median harga yang rendah di semua daerah. Hal ini menunjukkan bahwa terdapat demand yang cukup tinggi terhadap tipe apartment terraced di seluruh daerah.
+# Data Preprocessing
+
+Proses preprocessing adalah tahap penting dalam analisis data yang mencakup serangkaian teknik untuk membersihkan, memformat, dan mengubah data menjadi bentuk yang lebih mudah diolah oleh model atau algoritma machine learning. Beberapa hal yang perlu dilakukan dalam preprocessing adalah sebagai berikut:
+
+Drop feature: Mendrop feature yang tidak relevan dengan permasalahan yang sedang dihadapi.
+Menangani missing value: Melakukan pengecekan untuk mengetahui apakah terdapat data yang hilang atau missing value. Jika ada, kita harus memutuskan cara terbaik untuk menangani missing value tersebut seperti menghapus baris atau kolom yang mengandung missing value, menggantinya dengan nilai yang paling mendekati dengan nilai aslinya (menggunakan mean, median, atau modus), atau menggunakan teknik imputasi lainnya.
+Menangani outlier: Melakukan pengecekan untuk mengetahui adanya data yang outlier atau data yang ekstrim. Jika ada, kita harus memutuskan cara terbaik untuk menangani outlier tersebut seperti menghapusnya atau melakukan transformasi data.
+Kita akan menggunakan dataframe hasil duplikasi dari dataframe asli yang sebelumnya digunakan.
+# Menduplikasi dataframe df
+
+df_model=df.copy()
+**Data Cleaning**
+
+Sebelum menganalisa data, kita perlu melakukan data cleaning untuk mengatasi kesalahan pada data dan inkonsistensi yang mungkin muncul sehingga data yang sudah dibersihkan menjadi data berkualitas dapat digunakan pada proses analisa nantinya.
+# Jumlah baris dan kolom dataframe awal
+
+df_model.shape
+df_model.describe()
+# Tipe data, jumlah data kosong, jumlah data unik, dan sampel data unik pada setiap featue
+
+listItem = []
+for col in df_model.columns :
+    listItem.append([col, df_model[col].dtype, df_model[col].isna().sum(), round((df_model[col].isna().sum()/len(df_model[col])) * 100,2),
+                    df_model[col].nunique(), list(df_model[col].drop_duplicates().sample(2, random_state=78).values)]);
+
+dfDesc = pd.DataFrame(columns=['Data Features', 'Data Type', 'Null', 'Null Percentage', 'Unique', 'Unique Sample'],
+                     data=listItem)
+dfDesc
+Secara umum dapat dilihat bahwa:
+
+1. Terdapat 4.123 data dan 11 kolom pada dataset.
+2. Terdapat 3 kolom kategorikal dan 8 kolom numerikal.
+3. Tidak terdapat data kosong pada seluruh kolom dataset.
+4. Tidak terdapat anomali pada dataset karena berdasarkan domain knowledge, data pada dataset masih masuk akal.
+5. Beberapa kolom pada data memiliki value 0 yang dapat diinterpretasikan sebagai tidak adanya fasilitas (kantor publik, universitas, tempat parkir basement, dan lainnya) di sekitar apartment.
+# Mengubah tipe data dari float menjadi integer
+
+df_model['N_FacilitiesNearBy(ETC)'] = df_model['N_FacilitiesNearBy(ETC)'].astype('int64')
+df_model['N_FacilitiesNearBy(PublicOffice)'] = df_model['N_FacilitiesNearBy(PublicOffice)'].astype('int64')
+df_model['N_SchoolNearBy(University)'] = df_model['N_SchoolNearBy(University)'].astype('int64')
+df_model['N_Parkinglot(Basement)'] = df_model['N_Parkinglot(Basement)'].astype('int64')
+Kita mengubah tipe data pada kolom N_FacilitiesNearBy(ETC), N_FacilitiesNearBy(PublicOffice), N_SchoolNearBy(University), dan N_Parkinglot(Basement) dari yang sebelumnya memiliki tipe data float menjadi integer karena jumlah fasilitas disekitar apartment pasti merupakan bilangan bulat.
+**Handling Missing Value**
+# Total missing value
+
+df_model.isna().sum()
+# Heatmap missing value
+
+msno.matrix(df_model)
+Karena tidak terdapat data kosong pada seluruh kolom dataset maka tidak perlu dilakukan penangan khusus pada missing value.
+
+**Check Duplicate**
+# Menghitung data duplikat
+
+print(f'Jumlah data duplikat adalah: {df_model.duplicated().sum()}')
+# Mengekstrak data duplikat
+
+df_model.loc[df_model.duplicated(), :]
+# Persentase data duplikat
+
+print('Persentase data duplikat:',len(df_model[df_model.duplicated()])/len(df_model))
+Karena tidak terdapat kolom unik yang dapat menjadi identitas maka data yang memiliki nilai sama di setiap kolomnya dapat disebut sebagai data duplikat. Terdapat 1422 data duplikat pada dataset dan persentase data duplikat mencapat 34,49%. Duplikat data pada dataset machine learning dapat menyebabkan bias pada model sehingga menyebabkan overfitting karena titik data yang sama dapat dihitung beberapa kali. Oleh karena itu kita akan mendrop seluruh data duplikat.
+# Drop data duplikat
+
+df_model.drop_duplicates(inplace=True)
+
+# Total data duplikat setelah didrop
+
+print('Jumlah data duplikat sekarang:', df_model.duplicated().sum())
+# Jumlah baris dan kolom setelah data duplikat didrop
+
+df_model.shape
+Setelah data duplikat didrop, kini sudah tidak terdapat data duplikat lagi dan tersisa 2.701 data dari yang sebelumnya memiliki 4.123 data.
+
+**Drop Unrelevant Data**
+
+Kita perlu melakukan pengecekan pada setiap feature untuk melihat apakah terdapat feature yang tidak relevan dengan permasalahan yang sedang dihadapi berdasarkan domain knowledge.
+df_model.info()
+Semua feature pada dataset sudah dirasa relevan dengan permasalahan yang sedang dihadapi yaitu membangun sebuah model yang dapat memprediksi harga jual apartment yang sesuai dengan harga pasar berdasarkan berbagai faktor baik eksternal maupun internal yang dapat menentukan harga jual apartment. Selain itu semua feature juga ada sebelum melakukan prediksi harga apartment. Oleh karena itu tidak akan ada kolom yang didrop.
+
+**Outlier**
+
+Outlier merupakan titik data yang berbeda secara signifikan dibandingkan sebagian besar data. Secara umum, outlier dapat memiliki dampak yang signifikan pada model regresi dan dapat mendistorsi prediksi pada outlier. Maka dari itu, penting untuk menyelidiki outlier dan mempertimbangkan apakah outlier yang ada merupakan titik data valid yang harus disertakan dalam analisis dan mempertimbangkan metode alternatif untuk menangani outlier sebelum memutuskan untuk mengeluarkannya dari analisis.
+# Boxplot untuk mengecek outlier 
+
+plt.figure(figsize=(12,25))
+
+columns=['N_FacilitiesNearBy(ETC)','N_FacilitiesNearBy(PublicOffice)','N_SchoolNearBy(University)','N_Parkinglot(Basement)','YearBuilt','N_FacilitiesInApt','YearBuilt','Size(sqf)','SalePrice']
+
+plotnumber=1
+for kolom in columns:
+    plt.subplot(5,2,plotnumber)
+    sns.boxplot(data=df_model,x=kolom)
+    plt.title(kolom)
+
+    plotnumber +=1
+
+plt.suptitle('Distribusi Data',size=24)
+plt.show()
+# Deteksi outlier
+
+def detect_outliers(df_model):
+    outliers = {}
+    for col in df_model.columns:
+        if df_model[col].dtype in ['int64', 'float64']:
+            Q1 = df_model[col].quantile(0.25)
+            Q3 = df_model[col].quantile(0.75)
+            IQR = Q3-Q1
+            lower_bound = Q1-1.5*IQR
+            upper_bound = Q3+1.5*IQR
+            outliers[col] = len(df_model[(df_model[col]<lower_bound) | (df_model[col]>upper_bound)])
+    return outliers
+outliers = detect_outliers(df_model)
+for col, count in outliers.items():
+    print(f'Column: {col}, Outliers total: {count}')
+Berdasarkan boxplot, feature yang memiliki outlier adalah feature Size(sqf) atau ukuran apartment dan feature SalePrice atau harga apartment. Feature ukuran apartment memiliki total 84 outlier sedangkan feature harga apartment memiliki 17 outlier.
+
+Sekarang kita akan melihat deskriptif statistik dan distribusi dari feature ukuran apartment dan harga apartment untuk menentukan pendekatan yang tepat untuk mengatasi outlier dalam model regresi.
+# Function untuk melakukan pengecekan outlier
+
+def outlier(df_model):
+    Q1 = df_model.quantile(0.25)
+    Q3 = df_model.quantile(0.75)
+    IQR = Q3-Q1
+    print(f'''
+    IQR: {Q3-Q1}
+    Lower bound: {Q1-(1.5*IQR)}
+    Upper bound: {Q3+(1.5*IQR)}
+    ''')
+
+# Outlier pada feature ukuran apartment
+
+print('Ukuran apartment')
+outlier(df_model['Size(sqf)'])
+
+# Outlier pada feature harga apartment
+
+print('Harga apartment')
+outlier(df_model['SalePrice'])
+# Deskiptif statistik feature ukuran apartment
+
+print('Deskriptif Statistik Ukuran Apartment')
+display(df_model['Size(sqf)'].describe())
+
+# Deskiptif statistik feature harga apartment
+
+print('Deskriptif Statistik Harga Apartment')
+display(df_model['SalePrice'].describe())
+# Check jumlah data yang melebihi batas atas pada feature ukuran apartment
+
+print('Jumlah outlier pada feature ukuran apartment:', df_model[df_model['Size(sqf)'] > 1803.0].count()['Size(sqf)'])
+
+# Check jumlah data yang melebihi batas atas pada feature harga apartment
+
+print('Jumlah outlier pada feature harga apartment:', df_model[df_model['SalePrice'] > 521901.0].count()['SalePrice'])
+Jika outlier adalah titik data asli dan valid, menghapus outlier dapat menyebabkan hilangnya informasi penting dan dapat memengaruhi akurasi model secara keseluruhan. Sedangkan jika outlier disebabkan oleh kesalahan pengukuran atau faktor lain yang tidak mencerminkan hubungan antara variabel dependen dan independen, maka menghapus outlier mungkin diperlukan.
+
+Berdasarkan tabel statistik deskriptif, walaupun pada feature ukuran apartment dan harga apartment terdapat outlier, kita tidak akan mendrop outlier karena outlier tidak disebabkan oleh data yang salah dimasukkan atau data yang salah diukur. Menurut domain knowledge, outlier yang ada memang merepresentasikan variasi data yang normal terjadi seperti ukuran rumah yang sangat luas dan harga rumah yang sangat mahal.
+
+**Correlation**
+# Correlation Matrix
+
+plt.figure(figsize=(6, 6))
+corr = df_model.corr(method='pearson')
+sns.heatmap(corr, annot=True, vmin=-1, vmax=1, fmt='.2f',cmap='coolwarm',linewidths=.5)
+plt.title('Correlation Matrix',size=24)
+plt.show()
+1. Secara keseluruhan, correlation matrix menunjukkan bahwa semua feature memiliki korelasi medium (nilai korelasi 0,3 hingga 0,7) dengan harga apartment dan artinya semua feature memiliki hubungan atau keterkaitan dengan harga apartment. Korelasi paling tinggi dimiliki oleh ukuran apartment yang memiliki hubungan korelasi positif medium sehingga artinya ukuran apartment merupakan feature yang paling berkaitan dengan harga apartment dan semakin luas apartment maka akan semakin mahal harga apartment tersebut.
+2. Feature lainnya yang juga memiliki hubungan korelasi positif medium dengan harga apartment adalah jumlah fasilitas di apartment, tahun pembangunan, dan jumlah tempat parkir basement. Hal ini menunjukkan bahwa semakin banyak jumlah fasilitas di apartment, semakin baru apartment, dan semakin banyak jumlah tempat parkir basement maka akan semakin mahal harga apartment tersebut.
+3. Feature yang memiliki hubungan korelasi negatif medium dengan harga apartment adalah jumlah fasilitas kantor publik terdekat dari apartment, jumlah fasilitas terdekat lainnya dari apartment, dan jumlah universitas terdekat dari apartment. Hal ini menunjukkan bahwa semakin banyak jumlah fasilitas kantor publik, fasilitas lainnya, dan universitas di dekat apartment maka akan semakin murah harga apartment tersebut.
+4. Terlihat hubungan korelasi kuat diantara variabel independen yaitu jumlah fasilitas terdekat lainnya dari apartment dengan jumlah universitas terdekat dari apartment (nilai korelasi=0,81) dan fasilitas terdekat lainnya dari apartment dengan jumlah fasilitas kantor publik terdekat dari apartment (nilai korelasi=0,72). Hal ini menunjukkan adanya multikolinearitas dimana dua atau lebih variabel independen dalam model memiliki korelasi yang tinggi satu sama lain dan dapat menyebabkan masalah dalam analisis regresi yang menggunakan metode least square untuk mengestimasi parameter regresi seperti regresi linear atau regresi logistik karena dapat mempengaruhi interpretasi koefisien regresi dan membuat estimasi yang tidak stabil.
+
+**Clean Data**
+# Check 5 data pertama clean data
+
+df_model.head()
+# Check tipe data, jumlah data kosong, jumlah data unik, dan sampel data unik pada setiap feature
+
+listItem = []
+for col in df_model.columns :
+    listItem.append([col, df_model[col].dtype, df_model[col].isna().sum(), round((df_model[col].isna().sum()/len(df_model[col])) * 100,2),
+                    df_model[col].nunique(), list(df_model[col].drop_duplicates().sample(2).values)]);
+
+dfDesc = pd.DataFrame(columns=['Data Features', 'Data Type', 'Null', 'Null Percentage', 'Unique', 'Unique Sample'],
+                     data=listItem)
+dfDesc
+# Check informasi clean data
+
+df_model.info()
+print('Data sebelum dibersihkan:', df.shape)
+print('Data setelah dibersihkan:',df_model.shape)
+Setelah dibersihkan, dataset yang pada awalnya berjumlah 4.123 kini tersisa 2.701 data. Dataset yang sudah bersih selanjutnya sudah dapat digunakan untuk membuat model regresi.
+# Modeling
+
+**Feature Selection**
+# Check nama variable independent untuk modeling
+
+df_model.drop(columns='SalePrice').columns
+1. Semua kolom pada dataset yaitu tipe apartment, waktu yang dibutuhkan untuk mencapai stasiun subway terdekat, stasiun subway terdekat, jumlah fasilitas lainnya terdekat, jumlah kantor publik terdekat, jumlah universitas terdekat, jumlah tempat parkir basement, tahun pembangunan apartment, jumlah fasilitas apartment, dan ukuran apartment akan digunakan dalam membangun model karena menurut domain knowledge, semua feature dapat mempengaruhi harga apartment.
+2. Selain itu, hasil korelasi juga menunjukkan bahwa semua feature memiliki korelasi medium (nilai korelasi 0,3 hingga 0,7) dengan harga apartment yang artinya semua feature memiliki hubungan atau keterkaitan dengan harga apartment dan sudah dipastikan bahwa semua feature muncul sebelum label yaitu harga apartment sehingga semua feature bisa digunakan untuk melakukan prediksi harga apartment di Daegu, Korea Selatan.
+
+**Feature Engineering**
+# Menghitung jumlah data unik per feature
+
+df_model.nunique()
+**Scaling**
+
+Scaling adalah proses transformasi data numerik dalam suatu dataset agar nilainya berada dalam rentang tertentu dengan tujuan untuk memperbaiki konsistensi antara variabel yang memiliki unit atau rentang yang berbeda sehingga variabel-variabel tersebut dapat dibandingkan secara adil. Dalam konteks machine learning, scaling sering digunakan pada algoritma yang sensitif terhadap perbedaan skala data seperti algoritma regresi. Scaling juga dapat membantu mengoptimalkan kinerja algoritma, mengurangi waktu komputasi, dan meningkatkan interpretabilitas model.
+
+Dalam dataset terdapat feature yang memiliki rentang yang jauh berbeda yaitu feature N_Parkinglot(Basement) dan Size(Sqf). Maka kita akan melakukan Robust Scaler pada feature N_Parkinglot(Basement) dan Size(sqf) karena metode ini dapat memperbaiki konsistensi data yang memiliki nilai outliers dan distribusi data yang skewed sehingga mengurangi pengaruh nilai-nilai ekstrim pada hasil analisis.
+
+**Encoding**
+
+Encoding adalah proses mengubah data dari satu format ke format lain, yang biasanya dilakukan pada data kategorikal agar menjadi data numerikal sebelum dapat digunakan untuk melatih model.
+
+Dalam dataset terdapat beberapa feature yang merupakan data kategorikal sehingga kita perlu untuk melakukan encoding pada data kategorikal tersebut. Encoding yang akan dilakukan adalah sebagai berikut:
+
+1. One-Hot Encoding: HallwayType, karena feature merupakan variabel nominal yang memiliki 3 kategori (kita menggunakan One-Hot Encoding dibandingkan Binary Encoding karena jumlah kategori tidak terlalu banyak)
+2. Binary Encoding: SubwayStation, karena feature merupakan variabel nominal yang memiliki 8 kategori (kita menggunakan Binary Encoding dibandingkan One-Hot Encoding karena jumlah kategori cukup banyak sehingga kita ingin membuat variabel dummy yang lebih sedikit dan mengurangi overfitting yang terjadi jika variabel yang digunakan dalam membangun model semakin banyak)
+3. Ordinal Encoding: TimeToSubway, karena feature merupakan variabel ordinal dan kategori pada feature memiliki urutan berdasarkan waktu yang dibutuhkan untuk menuju stasiun terdekat
+# Scaling dan encoding
+
+ordinal_mapping = [
+    {'col':'TimeToSubway', 
+    'mapping':{'no_bus_stop_nearby':0, '0min-5min':1, '5min-10min':2, '10min-15min':3, '15-20min':4}}
+    ]
+
+ordinal_encoder = ce.OrdinalEncoder(cols=['TimeToSubway'], mapping=ordinal_mapping)
+
+transformer = ColumnTransformer([
+            ('Robust',RobustScaler(),['N_Parkinglot(Basement)','Size(sqf)']),
+            ('OneHotEncoding', OneHotEncoder(drop='first'), ['HallwayType']),
+            ('BinaryEncoding', ce.BinaryEncoder(), ['SubwayStation']),
+            ('OrdinalEncoding', ce.OrdinalEncoder(), ['TimeToSubway'])
+            ], remainder='passthrough')
+**Train Test Splitting**
+
+Sebelumnya kita akan mendefinisikan variabel x dan y. Dalam pemodelan regresi, x merupakan variabel independen yang digunakan untuk memprediksi nilai y atau variabel dependen. Sementara itu y adalah variabel dependen atau variabel yang ingin diprediksi.
+
+1. X = HallwayType, TimeToSubway, SubwayStation, N_FacilitiesNearBy(ETC), N_FacilitiesNearBy(PublicOffice), N_SchoolNearBy(University), N_Parkinglot(Basement), YearBuilt, N_FacilitiesInApt, Size(sqf)
+2. Y = SalePrice
+
+Data dipisah menjadi 2 bagian yaitu 80% untuk data training dan 20% untuk data testing. Data training digunakan untuk melatih model machine learning sedangkan data testing digunakan untuk menguji kinerja model yang telah dilatih.
+# Split data
+
+x=df_model.drop(['SalePrice'],axis=1)
+y=df_model['SalePrice']
+
+x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.2,random_state=8)
+**Benchmark Model**
+
+Setelah dataset telah dipisahkan menjadi data training dan data testing, sekarang kita akan memilih benchmark model untuk menentukan model referensi yang akan digunakan sebagai dasar perbandingan untuk membandingkan kinerja model baru yang dikembangkan.
+
+*Stand Alone Model*
+
+Beberapa model regresi yang akan digunakan dalam pemilihan benchmark model adalah sebagai berikut:
+
+1. Linear Regression: Model yang digunakan untuk memodelkan hubungan linier antara satu atau beberapa variabel input dan variabel target.
+2. Lasso Regression: Model regresi linear yang digunakan untuk mengurangi overfitting dengan menambahkan jumlah absolut dari koefisien sebagai regularisasi pada persamaan regresi linier dimana beberapa koefisien diatur ke nol sehingga model hanya mempertimbangkan fitur-fitur paling penting.
+3. Ridge Regression: Model regresi linear yang digunakan untuk mengurangi overfitting dengan menambahkan jumlah kuadrat dari koefisien sebagai regularisasi pada persamaan regresi linier.
+4. KNN Regression: Model regresi berbasis algoritma K-Nearest Neighbors (KNN) dengan mencari K tetangga terdekat dari data input yang ingin diprediksi dan kemudian melakukan prediksi variabel target numerik.
+5. Decision Tree Regression: Model regresi dalam bentuk struktur decision tree yang terdiri dari serangkaian node dan edge.
+6. Random Forest Regression: Model regresi yang membangun beberapa decision tree secara acak dengan menggunakan subset data training yang berbeda-beda dan subset fitur yang acak dari dataset yang tersedia dan setiap decision tree dihasilkan dengan menggunakan teknik bootstrap sampling dan feature bagging.
+7. XGBoost (Extreme Gradient Boosting) Regression: Model regresi yang memanfaatkan teknik gradient boosting dengan pendekatan ensemble learning.
+8. Support Vector Regression(SVR): Model regresi yang digunakan untuk memprediksi nilai target berdasarkan fitur atau variabel independen yang diberikan dengan pendekatan yang mirip dengan Support Vector Machine (SVM) namun memiliki tujuan untuk menemukan hyperplane (garis atau bidang) terbaik yang dapat memisahkan data dalam ruang fitur.
+
+K-fold cross validation juga digunakan sebagai metode evaluasi performa model yang dilakukan dengan membagi dataset menjadi 5 partisi yang sama besar lalu model akan dilatih pada 4 partisi dan diuji pada partisi yang tersisa. Prosedur ini akan dilakukan sebanyak 5 kali dengan partisi yang berbeda-beda sebagai data validasi dan data training sehingga akhirnya performa model akan dihitung berdasarkan rata-rata performa. Metode ini berguna untuk menghindari overfitting atau underfitting dan untuk mendapatkan generalisasi model yang lebih baik.
+# Stand Alone Model
+
+LinReg=LinearRegression()
+lasso=Lasso(random_state=8)
+ridge=Ridge(random_state=8)
+knn=KNeighborsRegressor()
+Tree=DecisionTreeRegressor(random_state=8)
+Forest=RandomForestRegressor(random_state=8)
+XGBoost=xgb.XGBRegressor()
+svr=SVR()
+
+models=[LinReg,lasso,ridge,knn,Tree,Forest,XGBoost,svr]
+
+score_R2=[]
+mean_R2=[]
+std_R2=[]
+
+score_RMSE=[]
+mean_RMSE=[]
+std_RMSE=[]
+
+score_MAE=[]
+mean_MAE=[]
+std_MAE=[]
+
+score_MAPE=[]
+mean_MAPE=[]
+std_MAPE=[]
+
+kfold=KFold(n_splits=5)
+
+for i in models:
+    model_pipeline=Pipeline([
+    ('preprocess',transformer),
+    ('model',i)
+    ])
+
+    # R-Squared
+    model_cv_R2=cross_val_score(model_pipeline,x_train,y_train,cv=kfold,scoring='r2')
+    score_R2.append(model_cv_R2)
+    mean_R2.append(model_cv_R2.mean())
+    std_R2.append(model_cv_R2.std())
+
+    # RMSE
+    model_cv_RMSE=cross_val_score(model_pipeline,x_train,y_train,cv=kfold,scoring='neg_root_mean_squared_error')
+    score_RMSE.append(model_cv_RMSE)
+    mean_RMSE.append(model_cv_RMSE.mean())
+    std_RMSE.append(model_cv_RMSE.std())
+
+    # MAE
+    model_cv_MAE=cross_val_score(model_pipeline,x_train,y_train,cv=kfold,scoring='neg_mean_absolute_error')
+    score_MAE.append(model_cv_MAE)
+    mean_MAE.append(model_cv_MAE.mean())
+    std_MAE.append(model_cv_MAE.std())
+
+    # MAPE
+    model_cv_MAPE=cross_val_score(model_pipeline,x_train,y_train,cv=kfold,scoring='neg_mean_absolute_percentage_error')
+    score_MAPE.append(model_cv_MAPE)
+    mean_MAPE.append(model_cv_MAPE.mean())
+    std_MAPE.append(model_cv_MAPE.std())
+# Hasil evaluasi
+
+kfold=pd.DataFrame({
+    'Model': ['Linear Regression','Lasso','Ridge','KNN','Decision Tree','Random Forest','XGBoost','SVR'],
+    'Mean R2': mean_R2,
+    'Standar Deviasi R2': std_R2,
+    'Mean RMSE': mean_RMSE,
+    'Standard Deviasi RMSE': std_RMSE,
+    'Mean MAE': mean_MAE,
+    'Standard Deviasi MAE': std_MAE,
+    'Mean MAPE': mean_MAPE,
+    'Standard Deviasi MAPE': std_MAPE
+}).set_index('Model').sort_values(by='Mean MAPE',ascending=False)
+
+kfold
+**Voting dan Stacking**
+
+Selain itu, kita juga akan mencoba menggabungkan beberapa model regresi yang berbeda untuk meningkatkan kinerja prediksi. Dalam teknik ini, beberapa model regresi dilatih pada data training yang sama dan kemudian prediksi dari masing-masing model digabungkan untuk memberikan prediksi akhir.
+
+Kita tidak akan menggunakan model SVR karena berdasarkan hasil evaluasi sebelumnya, model SVR memiliki nilai mean RMSE, MAE, dan MAPE yang jauh lebih besar dibandingkan model lainnya sehingga hal ini mengartikan bahwa kualitas prediksi model SVR kurang baik.
+
+*Voting Regressor*
+# Voting Regressor
+
+LinReg=LinearRegression()
+lasso=Lasso(random_state=8)
+ridge=Ridge(random_state=8)
+knn=KNeighborsRegressor()
+Tree=DecisionTreeRegressor(random_state=8)
+Forest=RandomForestRegressor(random_state=8)
+XGBoost=xgb.XGBRegressor()
+
+vc=VotingRegressor([
+  ('model1',LinReg),
+  ('model2',lasso),
+  ('model3',ridge),
+  ('model4',knn),
+  ('model5',Tree),
+  ('model6',Forest),
+  ('model7',XGBoost)
+])
+
+score_R2_voting=[]
+mean_R2_voting=[]
+std_R2_voting=[]
+
+score_RMSE_voting=[]
+mean_RMSE_voting=[]
+std_RMSE_voting=[]
+
+score_MAE_voting=[]
+mean_MAE_voting=[]
+std_MAE_voting=[]
+
+score_MAPE_voting=[]
+mean_MAPE_voting=[]
+std_MAPE_voting=[]
+
+kfold=KFold(n_splits=5)
+
+model_pipeline3=Pipeline([
+('preprocess',transformer),
+('model',vc)
+])
+
+# R-Squared
+model_cv_R2_voting=cross_val_score(model_pipeline3,x_train,y_train,cv=kfold,scoring='r2')
+score_R2_voting.append(model_cv_R2_voting)
+mean_R2_voting.append(model_cv_R2_voting.mean())
+std_R2_voting.append(model_cv_R2_voting.std())
+
+# RMSE
+model_cv_RMSE_voting=cross_val_score(model_pipeline3,x_train,y_train,cv=kfold,scoring='neg_root_mean_squared_error')
+score_RMSE_voting.append(model_cv_RMSE_voting)
+mean_RMSE_voting.append(model_cv_RMSE_voting.mean())
+std_RMSE_voting.append(model_cv_RMSE_voting.std())
+
+# MAE
+model_cv_MAE_voting=cross_val_score(model_pipeline3,x_train,y_train,cv=kfold,scoring='neg_mean_absolute_error')
+score_MAE_voting.append(model_cv_MAE_voting)
+mean_MAE_voting.append(model_cv_MAE_voting.mean())
+std_MAE_voting.append(model_cv_MAE_voting.std())
+
+# MAPE
+model_cv_MAPE_voting=cross_val_score(model_pipeline3,x_train,y_train,cv=kfold,scoring='neg_mean_absolute_percentage_error')
+score_MAPE_voting.append(model_cv_MAPE_voting)
+mean_MAPE_voting.append(model_cv_MAPE_voting.mean())
+std_MAPE_voting.append(model_cv_MAPE_voting.std())
+# Hasil evaluasi voting
+
+kfold_voting=pd.DataFrame({
+    'Model': ['Voting Regressor'],
+    'Mean R2': mean_R2_voting,
+    'Standar Deviasi R2': std_R2_voting,
+    'Mean RMSE': mean_RMSE_voting,
+    'Standard Deviasi RMSE': std_RMSE_voting,
+    'Mean MAE': mean_MAE_voting,
+    'Standard Deviasi MAE': std_MAE_voting,
+    'Mean MAPE': mean_MAPE_voting,
+    'Standard Deviasi MAPE': std_MAPE_voting
+}).set_index('Model')
+
+kfold_voting
+*Stacking Regressor*
+# Stacking Regressor
+
+LinReg=LinearRegression()
+lasso=Lasso(random_state=8)
+ridge=Ridge(random_state=8)
+knn=KNeighborsRegressor()
+Tree=DecisionTreeRegressor(random_state=8)
+Forest=RandomForestRegressor(random_state=8)
+XGBoost=xgb.XGBRegressor()
+
+sc=StackingRegressor([
+  ('model1',LinReg),
+  ('model2',lasso),
+  ('model3',ridge),
+  ('model4',knn),
+  ('model5',Tree),
+  ('model6',Forest),
+  ('model7',XGBoost)
+],final_estimator=XGBoost)
+
+score_R2_stacking=[]
+mean_R2_stacking=[]
+std_R2_stacking=[]
+
+score_RMSE_stacking=[]
+mean_RMSE_stacking=[]
+std_RMSE_stacking=[]
+
+score_MAE_stacking=[]
+mean_MAE_stacking=[]
+std_MAE_stacking=[]
+
+score_MAPE_stacking=[]
+mean_MAPE_stacking=[]
+std_MAPE_stacking=[]
+
+kfold=KFold(n_splits=5)
+
+model_pipeline4=Pipeline([
+('preprocess',transformer),
+('model',sc)
+])
+
+# R-Squared
+model_cv_R2_stacking=cross_val_score(model_pipeline4,x_train,y_train,cv=kfold,scoring='r2')
+score_R2_stacking.append(model_cv_R2_stacking)
+mean_R2_stacking.append(model_cv_R2_stacking.mean())
+std_R2_stacking.append(model_cv_R2_stacking.std())
+
+# RMSE
+model_cv_RMSE_stacking=cross_val_score(model_pipeline4,x_train,y_train,cv=kfold,scoring='neg_root_mean_squared_error')
+score_RMSE_stacking.append(model_cv_RMSE_stacking)
+mean_RMSE_stacking.append(model_cv_RMSE_stacking.mean())
+std_RMSE_stacking.append(model_cv_RMSE_stacking.std())
+
+# MAE
+model_cv_MAE_stacking=cross_val_score(model_pipeline4,x_train,y_train,cv=kfold,scoring='neg_mean_absolute_error')
+score_MAE_stacking.append(model_cv_MAE_stacking)
+mean_MAE_stacking.append(model_cv_MAE_stacking.mean())
+std_MAE_stacking.append(model_cv_MAE_stacking.std())
+
+# MAPE
+model_cv_MAPE_stacking=cross_val_score(model_pipeline4,x_train,y_train,cv=kfold,scoring='neg_mean_absolute_percentage_error')
+score_MAPE_stacking.append(model_cv_MAPE_stacking)
+mean_MAPE_stacking.append(model_cv_MAPE_stacking.mean())
+std_MAPE_stacking.append(model_cv_MAPE_stacking.std())
+# Hasil evaluasi stacking
+
+kfold_stacking=pd.DataFrame({
+    'Model': ['Stacking Regressor'],
+    'Mean R2': mean_R2_stacking,
+    'Standar Deviasi R2': std_R2_stacking,
+    'Mean RMSE': mean_RMSE_stacking,
+    'Standard Deviasi RMSE': std_RMSE_stacking,
+    'Mean MAE': mean_MAE_stacking,
+    'Standard Deviasi MAE': std_MAE_stacking,
+    'Mean MAPE': mean_MAPE_stacking,
+    'Standard Deviasi MAPE': std_MAPE_stacking
+}).set_index('Model')
+
+kfold_stacking
+**Summary**
+
+Berikut adalah rangkuman hasil evaluasi dari seluruh model yang digunakan:
+# Rangkuman hasil evaluasi seluruh model
+
+summary=pd.DataFrame({
+        'Model':['Linear Regression','Lasso Regression','Ridge Regression','KNN Regressor','Decision Tree Regressor','Random Forest Regressor','XGBoost Regressor','SVR','Voting Regressor','Stacking Regressor'],
+        'Mean R2': mean_R2+mean_R2_voting+mean_R2_stacking,
+        'Standar Deviasi R2': std_R2+std_R2_voting+std_R2_stacking,
+        'Mean RMSE': mean_RMSE+mean_RMSE_voting+mean_RMSE_stacking,
+        'Standard Deviasi RMSE':  std_RMSE+std_RMSE_voting+std_RMSE_stacking,
+        'Mean MAE': mean_MAE+mean_MAE_voting+mean_MAE_stacking,
+        'Standard Deviasi MAE':  std_MAE+std_MAE_voting+std_MAE_stacking,
+        'Mean MAPE': mean_MAPE+mean_MAPE_voting+mean_MAPE_stacking,
+        'Standard Deviasi MAPE':  std_MAPE+std_MAPE_voting+std_MAPE_stacking}).set_index('Model').sort_values(by='Mean MAPE',ascending=False)
+summary
+Berdasarkan hasil evaluasi di atas, model Random Forest Regressor, Decision Tree Regressor, XGBoost Regressor, dan Voting Regressor memiliki nilai mean RMSE, mean MAE, dan mean MAPE yang terkecil dibandingkan model lainnya dimana Random Forest Regressor merupakan model yang terbaik. Semakin kecil nilai RMSE, MAE,dan MAPE menunjukkan bahwa semakin baik kualitas prediksi model. Selain itu nilai standard deviasi dari RMSE, MAE, dan MAPE juga relatif kecil sehingga menunjukka bahwa hasil konsisten.
+
+Maka Random Forest Regressor, Decision Tree Regressor, XGBoost Regressor, dan Voting Regressor merupakan benchmark 4 model terbaik dan akan dilakukan prediksi pada data testing.
+
+**Prediksi ke Data Testing dengan Benchmark 4 Model Terbaik**
+# Benchmark 4 model terbaik
+
+LinReg=LinearRegression()
+lasso=Lasso(random_state=8)
+ridge=Ridge(random_state=8)
+knn=KNeighborsRegressor()
+Tree=DecisionTreeRegressor(random_state=8)
+Forest=RandomForestRegressor(random_state=8)
+XGBoost=xgb.XGBRegressor()
+
+models={
+    'Random Forest':RandomForestRegressor(random_state=8),
+    'Decision Tree':DecisionTreeRegressor(random_state=8),
+    'XGBoost':xgb.XGBRegressor(),
+    'Voting Regression':VotingRegressor([('model1',LinReg),('model2',lasso),('model3',ridge),('model4',knn),('model5',Tree),('model6',Forest),('model7',XGBoost)])
+}
+
+score_R2=[]
+score_RMSE=[]
+score_MAE=[]
+score_MAPE=[]
+
+for i in models:
+    model=Pipeline([
+        ('preprocessing', transformer),
+        ('model', models[i])
+        ])
+    model.fit(x_train, y_train)
+    y_pred=model.predict(x_test)
+
+    score_R2.append(r2_score(y_test, y_pred))
+    score_RMSE.append(np.sqrt(mean_squared_error(y_test, y_pred)))
+    score_MAE.append(mean_absolute_error(y_test, y_pred))
+    score_MAPE.append(mean_absolute_percentage_error(y_test, y_pred))
+
+score_before_tuning=pd.DataFrame({'R2':score_R2,'RMSE': score_RMSE, 'MAE': score_MAE, 'MAPE': score_MAPE}, index=models.keys()).sort_values(by='MAPE')
+
+score_before_tuning
+Setelah dilakukan prediksi pada data testing, model Decision Tree Regressor merupakan model terbaik karena memiliki nilai mean RMSE, mean MAE, dan mean MAPE yang terkecil dibandingkan model lainnya.
+
+**Hyperparameter Tuning**
+
+Sekarang kita akan melakukan hyperparameter tuning untuk mencari kombinasi parameter terbaik pada sebuah model machine learning dengan tujuan meningkatkan performa dan akurasi dari model tersebut. Berdasarkan metrics yang digunakan, model Random Forest Regression merupakan model yang memiliki performa terbaik pada saat melakukan cross validation sedangkan model Decision Tree Regression merupakan model yang memiliki performa terbaik pada saat melakukan prediksi pada data testing.
+
+Oleh karena itu, kita akan melakukan hyperparameter tuning pada kedua model yaitu model Random Forest Regressor dan Decision Tree Regressor untuk dapat meningkatkan performa model dan pada akhirnya memilih model final yang terbaik.
+
+*Model Random Forest Regressor*
+
+Random Forest merupakan metode ensemble yang menggabungkan model machine learning Decision Tree dengan karakteristik data yang berbeda yang memiliki tujuan untuk memperkecil ragam nilai prediksi dan membuat hasil prediksi menjadi lebih stabil dimana hasil prediksi akhir didapatkan dari majority vote. Pada Random Forest kita memilih secara acak kandidat fitur yang akan digunakan dalam setiap splitting tree.
+
+Berikut adalah parameter yang akan digunakan pada saat melakukan hyperparameter tuning model Random Forest:
+
+1. n_estimators: Jumlah decision tree yang dibangun di dalam random forest.
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 1 sampai 1000.
+
+2. criterion: Fungsi untuk mengukur kualitas split. Kriteria yang umumnya digunakan untuk regresi adalah MSE, MAE, Friedman MSE, dan Poisson.
+max_depth: Kedalaman maksimum dari setiap decision tree dalam random forest. Semakin dalam decision tree maka semakin besar kemungkinan overfitting.
+
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 1 sampai 50.
+
+3. max_features: Jumlah maksimum fitur yang digunakan dalam setiap decision tree untuk membagi sebuah node. Semakin sedikit fitur yang digunakan maka akan mengurangi kemungkinan overfitting.
+4. min_samples_split: Jumlah minimum data point yang diperlukan untuk membagi sebuah node. Semakin besar nilai min_samples_split maka semakin sedikit pembagian node sehingga mengurangi kemungkinan overfitting namun jika nilainya terlalu besar maka semakin dapat menyebabkan underfitting.
+
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 2 sampai 20.
+
+5. min_samples_leaf: Jumlah minimum sampel yang dibutuhkan pada setiap leaf di dalam decision tree. Semakin besar nilai min_samples_leaf maka akan semakin sedikit node yang dihasilkan dan dapat mengurangi kemungkinan overfitting namun jika nilainya terlalu besar dapat menyebabkan underfitting.
+
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 1 sampai 20.
+# Hyperparameter Random Forest
+
+hyperparam_forest={
+        'modeling__n_estimators': list(np.arange(1,1001)),
+        'modeling__criterion':['absolute_error','squared_error','friedman_mse','poisson'],
+        'modeling__max_depth':[np.arange(1,51),None],
+        'modeling__max_features':['auto','sqrt','log2',None],
+        'modeling__min_samples_split':list(np.arange(2,21)),
+        'modeling__min_samples_leaf':list(np.arange(1,21))
+}
+Randomized search merupakan sebuah metode untuk melakukan penelusuran terhadap kombinasi hyperparameter pada model secara acak. Setelah hyperparameter yang tepat ditemukan, maka model dapat dilatih ulang dengan hyperparameter yang telah dioptimalkan tersebut.
+
+Kita akan menggunakan randomized search dibandingkan grid search karena randomized search lebih efektif untuk mengurangi waktu yang dibutuhkan untuk menemukan hyperparameter yang tepat.
+# Algoritma (benchmark model)
+
+Forest=RandomForestRegressor(random_state=8)
+
+pipe_model_forest = Pipeline([
+        ('preprocessing', transformer),
+        ('modeling', Forest)
+ ])
+
+kfold=KFold(n_splits=5)
+
+# RandomizedSearch
+
+randomsearch_forest=RandomizedSearchCV(
+        estimator=pipe_model_forest,              # Model yang hendak di tuning
+        param_distributions=hyperparam_forest,    # Hyperparameter
+        cv=kfold,                                 # 5 fold cross validation
+        scoring=['r2', 'neg_root_mean_squared_error', 'neg_mean_absolute_error', 'neg_mean_absolute_percentage_error'], 
+        n_jobs=-1,                                # Memaksimalkan processor
+        refit='neg_mean_absolute_percentage_error',
+        random_state=8
+)
+# Fit model dengan hyperparameter tuning pada data training
+
+randomsearch_forest.fit(x_train,y_train)
+# Hasil hyperparamer tuning dalam bentuk dataframe yang diurutkan berdasarkan MAPE
+
+pd.DataFrame(randomsearch_forest.cv_results_).sort_values(by=['rank_test_neg_root_mean_squared_error', 'rank_test_neg_mean_absolute_error', 'rank_test_neg_mean_absolute_percentage_error'])
+# Parameter terbaik 
+
+print('Parameter terbaik:')
+randomsearch_forest.best_params_
+# Best score 
+
+print(f'Nilai MAPE setelah hyperparameter tuning: {randomsearch_forest.best_score_}')
+*Prediksi ke Data Testing dengan Model Random Forest yang Telah Di-tuning*
+
+Sekarang kita akan melakukan prediksi ke data testing dengan menggunakan model Random Forest yang sudah dilakukan hyperparameter tuning untuk menguji performa model.
+model = {'Random Forest': RandomForestRegressor(random_state=8)}
+
+# Define model terhadap estimator terbaik
+forest_tuning = randomsearch_forest.best_estimator_
+
+# Fitting model
+forest_tuning.fit(x_train, y_train)
+
+# Prediksi ke data testing
+y_pred_forest_tuning = forest_tuning.predict(x_test)
+
+nilai_R2_forest_tuning=r2_score(y_test, y_pred_forest_tuning)
+nilai_RMSE_forest_tuning=np.sqrt(mean_squared_error(y_test, y_pred_forest_tuning))
+nilai_MAE_forest_tuning=mean_absolute_error(y_test, y_pred_forest_tuning)
+nilai_MAPE_forest_tuning=mean_absolute_percentage_error(y_test, y_pred_forest_tuning)
+
+score_after_tuning_forest=pd.DataFrame({'R2': nilai_R2_forest_tuning, 'RMSE': nilai_RMSE_forest_tuning, 'MAE': nilai_MAE_forest_tuning, 'MAPE': nilai_MAPE_forest_tuning}, index=model.keys())
+score_after_tuning_forest
+*Perbanding Performa Model Random Forest Sebelum dan Setelah Hyperparameter Tuning*
+# Sebelum hyperparameter tuning
+
+pd.DataFrame(score_before_tuning.loc['Random Forest']).T
+# Setelah hyperparameter tuning
+
+score_after_tuning_forest
+Performa model Random Forest pada data testing setelah dilakukan hyperparameter tuning tidak menujukkan peningkatan karena nilai RMSE, MAE, dan MAPE mengalami peningkatan setelah dilakukan hyperparameter tuning. Hal tersebut menunjukkan bahwa semakin besar nilai kesalahan prediksi dan model tidak berhasil untuk membuat prediksi yang lebih akurat.
+
+Oleh karena itu, kita sekarang akan mencoba untuk melakukan hyperparameter tuning pada model Decision Tree yang memiliki performa paling baik pada saat diprediksi ke data testing.
+
+**Model Decision Tree Regressor**
+
+Decision tree regressor merupakan algoritma machine learning yang menggunakan struktur pohon untuk membagi data menjadi kelompok yang semakin kecil dan homogen berdasarkan nilai fitur-fiturnya dan setiap node dalam tree memprediksi nilai rata-rata target dari kelompok data yang masuk ke dalam node tersebut.
+
+Proses pembuatan Decision Tree Regressor dimulai dengan membagi data menjadi dua kelompok berdasarkan nilai fitur yang dipilih dan setiap kelompok dibagi menjadi dua kelompok lagi berdasarkan nilai fitur yang lain. Proses ini diulangi hingga tercapai kondisi berhenti yang ditentukan. Setelah tree selesai dibuat, proses prediksi dilakukan dengan melewati data melalui pohon dan memilih nilai rata-rata target dari node yang sesuai dengan nilai fitur-fiturnya.
+
+Terdapat beberapa parameter model Decision Tree yang memiliki kesamaan dengan parameter model Random Forest karena pada dasarnya Random Forest merupakan kumpulan dari beberapa Decision Tree untuk menghasilkan prediksi yang lebih akurat dan stabil.
+
+Berikut adalah parameter yang akan digunakan pada saat melakukan hyperparameter tuning model Decision Tree:
+
+1. splitter: Strategi yang digunakan untuk membagi sebuah node. Strategi yang dapat digunakan adalah best untuk memilih split terbaik dan random untuk memilih split terbaik secara random.
+2. criterion: Fungsi untuk mengukur kualitas split. Kriteria yang umumnya digunakan untuk regresi adalah MSE, MAE, Friedman MSE, dan Poisson.
+3. max_depth: Kedalaman maksimum dari decision tree. Semakin dalam decision tree maka akan semakin kompleks model dan semakin besar kemungkinan overfitting.
+4. max_features: Jumlah maksimum fitur yang digunakan dalam setiap decision tree untuk membagi sebuah node. Semakin sedikit fitur yang digunakan maka akan mengurangi kemungkinan overfitting.
+
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 1 sampai 50.
+
+5. min_samples_split: Jumlah minimum data point yang diperlukan untuk membagi sebuah node. Semakin besar nilai min_samples_split maka semakin sedikit pembagian node sehingga mengurangi kemungkinan overfitting namun jika nilainya terlalu besar maka semakin dapat menyebabkan underfitting.
+
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 1 sampai 20.
+
+6. min_samples_leaf: Jumlah minimum sampel yang dibutuhkan pada setiap leaf di dalam decision tree. Semakin besar nilai min_samples_leaf maka akan semakin sedikit node yang dihasilkan dan dapat mengurangi kemungkinan overfitting namun jika nilainya terlalu besar dapat menyebabkan underfitting.
+
+Pada saat melakukan hyperparameter tuning, value yang akan digunakan adalah 1 sampai 20.
+# Hyperparameter Decision Tree
+
+hyperparam_tree={
+        'modeling__splitter': ['best','random'],
+        'modeling__criterion':['absolute_error','squared_error','friedman_mse','poisson'],
+        'modeling__max_depth':[np.arange(1,51),None],
+        'modeling__max_features':['auto','sqrt','log2',None],
+        'modeling__min_samples_split':list(np.arange(2,21)),
+        'modeling__min_samples_leaf':list(np.arange(1,21))
+}
+# Algoritma (benchmark model)
+
+Tree=DecisionTreeRegressor(random_state=8)
+
+pipe_model_tree = Pipeline([
+        ('preprocessing', transformer),
+        ('modeling', Tree)
+ ])
+
+kfold=KFold(n_splits=5)
+
+# RandomizedSearch
+
+randomsearch_tree=RandomizedSearchCV(
+        estimator=pipe_model_tree,                # Model yang hendak di tuning
+        param_distributions=hyperparam_tree,      # Hyperparameter
+        cv=kfold,                                 # 5 fold cross validation
+        scoring=['r2', 'neg_root_mean_squared_error', 'neg_mean_absolute_error', 'neg_mean_absolute_percentage_error'], 
+        n_jobs=-1,                                # Memaksimalkan processor
+        refit='neg_mean_absolute_percentage_error',
+        random_state=8
+)
+# Fit model dengan hyperparameter tuning pada data training
+
+randomsearch_tree.fit(x_train,y_train)
+# Hasil hyperparamer tuning dalam bentuk dataframe yang diurutkan berdasarkan MAPE
+
+pd.DataFrame(randomsearch_tree.cv_results_).sort_values(by=['rank_test_neg_root_mean_squared_error', 'rank_test_neg_mean_absolute_error', 'rank_test_neg_mean_absolute_percentage_error'])
+# Parameter terbaik 
+
+print('Parameter terbaik:')
+randomsearch_tree.best_params_
+# Best score 
+
+print(f'Nilai MAPE setelah hyperparameter tuning: {randomsearch_tree.best_score_}')
+model = {'Decision Tree': DecisionTreeRegressor(random_state=8)}
+
+# Define model terhadap estimator terbaik
+tree_tuning = randomsearch_tree.best_estimator_
+
+# Fitting model
+tree_tuning.fit(x_train, y_train)
+
+# Prediksi ke data testing
+y_pred_tree_tuning = tree_tuning.predict(x_test)
+
+nilai_R2_tree_tuning=r2_score(y_test, y_pred_tree_tuning)
+nilai_RMSE_tree_tuning=np.sqrt(mean_squared_error(y_test, y_pred_tree_tuning))
+nilai_MAE_tree_tuning=mean_absolute_error(y_test, y_pred_tree_tuning)
+nilai_MAPE_tree_tuning=mean_absolute_percentage_error(y_test, y_pred_tree_tuning)
+
+score_after_tuning_tree = pd.DataFrame({'R2': nilai_R2_tree_tuning, 'RMSE': nilai_RMSE_tree_tuning, 'MAE': nilai_MAE_tree_tuning, 'MAPE': nilai_MAPE_tree_tuning}, index=model.keys())
+score_after_tuning_tree
+*Perbanding Performa Model Decision Tree Sebelum dan Setelah Hyperparameter Tuning*
+
+Sekarang kita akan melakukan prediksi ke data testing dengan menggunakan model Decision Tree yang sudah dilakukan hyperparameter tuning untuk menguji performa model.
+# Sebelum hyperparameter tuning
+
+pd.DataFrame(score_before_tuning.loc['Decision Tree']).T
+# Setelah hyperparameter tuning
+
+score_after_tuning_tree
+Sebelum tuning, model memiliki nilai R2 yang lebih tinggi dan nilai RMSE, MAE, dan MAPE yang lebih rendah.
+
+Setelah tuning, model memiliki nilai R2 yang lebih rendah dan nilai RMSE, MAE, dan MAPE yang lebih tinggi.
+
+Berdasarkan metrik evaluasi R2, RMSE, MAE, dan MAPE, model regresi sebelum tuning memiliki kinerja yang lebih baik dibandingkan dengan setelah tuning. Ini karena sebelum tuning, model memiliki R2 yang lebih tinggi (yang baik) dan RMSE, MAE, serta MAPE yang lebih rendah (yang juga baik).
+**Residual Plot**
+
+Model Decision Tree akan dievaluasi secara eksploratif dengan menggunakan residual plot untuk melihat apakah model Decision Tree Regressor dapat memprediksi nilai dengan akurat atau tidak. Residual plot merupakan grafik yang memperlihatkan selisih antara nilai aktual dan nilai yang diprediksi oleh model.
+plt.figure(figsize=(14, 8))
+plot = sns.scatterplot(x=y_test, y=y_pred).set(title='Actual vs. Prediction Price',  
+                                               xlabel='Actual Price', 
+                                               ylabel='Predicted Price');
+Berdasarkan pengecekkan mengenai residual plot diatas, terlihat dimana grafik akan semakin menyebar jika harga semakin tinggi, dan dapat diakatakan bahwa semakin tinggi harganya maka akan semakin rendah akurasi dari prediksi tersebut
+# Residual = y_actual - y_prediksi
+residual = y_test-y_pred
+
+df_residual = pd.DataFrame({
+    'y_pred': y_pred_tree_tuning,
+    'residual': residual 
+})
+
+df_residual.head()
+# Check apakah residual memiliki outlier
+
+sns.boxplot(data=df_residual,x=residual) 
+# Residual Plot
+
+plt.figure(figsize=(14,5))
+sns.scatterplot(data=df_residual, x='y_pred', y='residual')
+sns.lineplot(data=df_residual, x='y_pred', y=0, color='red')
+plt.title('Residual Plot')
+plt.show()
+harga = pd.DataFrame({'Predicted Price': [y_pred.mean()], 'Actual Price': [y_test.mean()]})
+harga
+
+akurasi = (harga['Actual Price'] / harga['Predicted Price'])*100
+akurasi
+Diatas adalah hasil perhitungan nilai akurasi dari prediksi harga apartemen di Daegu menggunakan model regresi Decision Tree. dari perhitungan diatas, terlihat bahwa akurasi dari model tersebut adalah 98.69%
+**Feature Importance**
+
+Kita akan melakukan evaluasi terhadap feature yang mempengaruhi harga apartment di Daegu, Korea Selatan dalam model Decision Tree Regressor melalui function feature importance.
+transformers=ColumnTransformer([
+            ('OneHotEncoding', OneHotEncoder(drop='first'), ['HallwayType']),
+            ('BinaryEncoding', ce.BinaryEncoder(), ['SubwayStation']),
+            ('OrdinalEncoding', ce.OrdinalEncoder(), ['TimeToSubway'])
+            ], remainder='passthrough')
+
+# Fit column transformer ke data training
+transformers.fit(x_train)
+# Algoritma 
+
+Tree=DecisionTreeRegressor(random_state=8)
+
+pipe_model_trees=Pipeline([
+        ('preprocessing',transformers),
+        ('modeling',Tree)
+ ])
+
+kfold=KFold(n_splits=5)
+
+# RandomizedSearch
+
+randomsearch_trees=RandomizedSearchCV(
+        estimator=pipe_model_trees,                # Model yang hendak di tuning
+        param_distributions=hyperparam_tree,      # Hyperparameter
+        cv=kfold,                                 # 5 fold cross validation
+        scoring=['r2', 'neg_root_mean_squared_error', 'neg_mean_absolute_error', 'neg_mean_absolute_percentage_error'], 
+        n_jobs=-1,                                # Memaksimalkan processor
+        refit='neg_mean_absolute_percentage_error',
+        random_state=8
+)
+# Fit model dengan hyperparameter tuning pada data training
+
+randomsearch_trees.fit(x_train,y_train)
+# Define model terhadap estimator terbaik
+
+tree_tunings=randomsearch_trees.best_estimator_
+
+# Fitting model
+
+tree_tunings.fit(x_train, y_train)
+# Feature importances
+
+feature_imp=pd.Series(tree_tunings['modeling'].feature_importances_, transformers.get_feature_names()).sort_values(ascending=False)
+feature_imp.to_frame(name='Feature Importances')
+# Plot feature importances
+
+feature_imp=pd.Series(tree_tunings['modeling'].feature_importances_, transformers.get_feature_names()).sort_values(ascending=True)
+feature_imp.plot(kind='barh', title='Feature Importances')
+
+plt.show()
+# CONCLUSION
+
+Setelah melakukan pemodelan dan pengujian menggunakan berbagai jenis model regresi, didapatkan hasil evaluasi berdasarkan metrik-metrik yang digunakan. Model yang diuji meliputi Random Forest Regressor, Decision Tree Regressor, XGBoost Regressor, Voting Regressor, Stacking Regressor, KNN Regressor, Linear Regression, Lasso Regression, Ridge Regression dan SVR.
+
+Berikut adalah hasil pengujian metrik evaluasi untuk beberapa model tersebut:
+
+Model Random Forest Regressor menghasilkan nilai R2 sebesar 0.800099, RMSE sebesar 46886.208031, MAE sebesar 37806.336434, dan MAPE sebesar 19.35%.
+Model Decision Tree Regressor menghasilkan nilai R2 sebesar 0.798259, RMSE sebesar 47087.515123, MAE sebesar 37947.755779, dan MAPE sebesar 19.43%.
+Model XGBoost Regressor menghasilkan nilai R2 sebesar 0.797535, RMSE sebesar 47191.030367, MAE sebesar 37968.766175, dan MAPE sebesar 19.45%.
+Dari hasil tersebut, model terbaik yang digunakan untuk memprediksi harga apartemen di Daegu, Korea Selatan adalah Decision Tree Regressor yang telah dituning, dengan nilai MAPE sebesar 19.07%.
+
+Menurut penelitian Lewis (1982), model dengan nilai MAPE sebesar 10% hingga 20% dapat diinterpretasikan sebagai model dengan kemampuan peramalan yang baik. Oleh karena itu, model Decision Tree Regressor yang telah dituning ini dapat dianggap baik dalam melakukan prediksi harga apartemen di Daegu.
+
+Namun, perlu diingat bahwa prediksi harga apartemen dapat meleset dari harga apartemen sebenarnya. Hal ini disebabkan oleh keterbatasan fitur yang digunakan dalam pemodelan. Oleh karena itu, model ini perlu ditingkatkan lagi dengan menambahkan lebih banyak fitur atau melakukan penyesuaian pada parameter model.
+
+Berdasarkan model Decision Tree Regressor yang telah dituning, fitur yang paling berpengaruh terhadap harga apartemen adalah tipe apartemen terraced, ukuran apartemen (Size), dan jumlah tempat parkir basement.
+
+Dengan adanya model regresi ini, agen real estate dapat menentukan harga jual apartemen yang tepat di Daegu, Korea Selatan, sehingga dapat meningkatkan tingkat keberhasilan dalam memasarkan dan menjual unit apartemen tersebut. Selain itu, model regresi ini juga dapat membantu agen real estate dalam memahami bagaimana karakteristik apartemen dan harga apartemen saling berhubungan. Sehingga, model ini sangat membantu dibandingkan sebelum adanya model regresi.
+# RECOMMENDATION
+
+1. Optimalisasi Model: Meskipun Decision Tree Regressor menunjukkan performa yang paling baik dari model-model lainnya, masih ada ruang untuk peningkatan. Oleh karena itu, disarankan untuk melakukan penelitian lebih lanjut dengan mempertimbangkan fitur-fitur lain yang dapat mempengaruhi harga apartemen di Daegu.
+2. Tuning Parameter: Sebagai langkah lanjutan, disarankan untuk melakukan tuning pada parameter model. Mungkin ada kemungkinan untuk meningkatkan akurasi model dengan menyesuaikan parameter tersebut.
+
+3. Evaluasi Model Lain: Meski Decision Tree Regressor memberikan hasil yang paling baik, evaluasi model lain seperti Neural Networks atau LightGBM juga bisa dilakukan. Model-model tersebut bisa memiliki potensi untuk menghasilkan prediksi yang lebih akurat.
+
+4. Implementasi Model: Gunakan model ini sebagai alat pendukung dalam menentukan harga jual apartemen. Ini akan membantu agen real estate memaksimalkan keuntungan dan meningkatkan tingkat keberhasilan dalam penjualan.
+
+5. Pelatihan Agen Real Estate: Agen real estate harus dilatih untuk memahami model ini dan cara kerjanya. Mereka harus dapat menerapkan pengetahuan ini dalam proses penjualan mereka.
+
+6. Analisis Lebih Lanjut: Analisis lebih lanjut pada fitur yang paling berpengaruh terhadap harga apartemen dapat memberikan wawasan lebih mendalam tentang pasar apartemen di Daegu. Fitur ini dapat dianalisis lebih lanjut untuk melihat bagaimana perubahan dalam fitur-fitur ini dapat mempengaruhi harga apartemen.
+
+7. Pengembangan Model Prediktif Selanjutnya: Gunakan pengetahuan yang diperoleh dari model ini untuk mengembangkan model prediktif untuk apartemen di lokasi lain.
+# Save Machine Learning
+# Import pickle
+
+import pickle as pickle
+# Save Machine Learning
+
+pipe_model=Pipeline([('preprocessing',transformer),('model',DecisionTreeRegressor())])
+pipe_model.fit(x_train,y_train)
+
+pickle.dump(pipe_model,open('data_daegu_apartment.sav','wb'))
+# Load Machine Learning
+
+file_name='data_daegu_apartment.sav'
+
+loaded_model=pickle.load(open(file_name,'rb'))
+mean_absolute_percentage_error(y_test,loaded_model.predict(x_test))
+np.sqrt(mean_squared_error(y_test,loaded_model.predict(x_test)))
